@@ -1,0 +1,76 @@
+# Vercel 忽略文件
+# 排除不必要的文件以减少函数大小（函数大小限制：300MB）
+
+# 数据库文件（Vercel不支持SQLite）
+*.db
+*.sqlite
+*.sqlite3
+moyu_zhixue.db
+
+# 上传文件目录
+uploads/
+game/uploads/
+game/exports/
+exports/
+
+# 音频文件（太大，应该使用CDN或外部存储）
+真题与听力/
+**/*.mp3
+**/*.wav
+**/*.ogg
+
+# 视频文件
+**/*.mp4
+**/*.avi
+**/*.mov
+videos/
+
+# 开发文件
+node_modules/.cache/
+*.log
+.DS_Store
+.vscode/
+.idea/
+.git/
+.gitignore
+
+# 测试文件
+test/
+tests/
+__tests__/
+*.test.js
+*.spec.js
+
+# 文档（保留README.md）
+*.md
+!README.md
+VERCEL_DEPLOY.md
+
+# 工具文件
+tools/
+server_modules/exam-debug-tool.js
+server_modules/fix-*.js
+server_modules/init-*.js
+server_modules/import-*.js
+
+# 游戏相关大文件
+game/server.js
+game/游戏核心逻辑.js
+game/敌人.js
+game/玩家.js
+game/题目管理系统.js
+game-server.js
+
+# 大型JSON数据文件（如果太大）
+listening-data/
+data/*.json
+!data/vocabulary-library.json
+
+# 图片文件（应该通过CDN提供，但保留小图片）
+image/
+**/*.jpg
+**/*.jpeg
+**/*.png
+**/*.gif
+**/*.svg
+**/*.webp

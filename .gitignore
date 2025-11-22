@@ -1,0 +1,55 @@
+# 依赖
+node_modules/
+package-lock.json
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+moyu_zhixue.db
+
+# 上传文件
+uploads/
+game/uploads/
+game/exports/
+exports/
+
+# 音频文件（太大，应使用CDN）
+真题与听力/
+**/*.mp3
+**/*.wav
+**/*.ogg
+
+# 视频文件
+**/*.mp4
+**/*.avi
+**/*.mov
+videos/
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 日志
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 系统文件
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 测试
+coverage/
+.nyc_output/
+
+# 临时文件
+*.tmp
+*.temp
+

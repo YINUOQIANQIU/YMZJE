@@ -1,47 +1,48 @@
 // [file name]: server_modules/database.js
-const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const express = require('express');
+const DatabaseWrapper = require('./database-wrapper.js');
+const { convertTableSchema } = require('./sql-converter.js');
 
-// 支持环境变量配置数据库路径（Vercel适配）
-// ⚠️ 注意：Vercel Serverless Functions 不支持 SQLite（只读文件系统）
-// 如果检测到 Vercel 环境，建议使用外部数据库（PostgreSQL/MySQL）
-const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '../moyu_zhixue.db');
-
-// Vercel 环境检测
-if (process.env.VERCEL || process.env.VERCEL_ENV) {
-    console.warn('⚠️ 警告：检测到 Vercel 环境');
-    console.warn('⚠️ SQLite 在 Vercel 中不可用，请使用外部数据库（PostgreSQL/MySQL）');
-    console.warn('⚠️ 当前使用 SQLite 可能导致数据库操作失败');
-}
-
-// 确保数据库目录存在（仅在非 Vercel 环境）
-if (!process.env.VERCEL && !process.env.VERCEL_ENV) {
-    const dbDir = path.dirname(dbPath);
-    if (!fs.existsSync(dbDir)) {
-        fs.mkdirSync(dbDir, { recursive: true });
-    }
-}
-
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('数据库连接错误:', err.message);
-        console.error('数据库路径:', dbPath);
-        if (process.env.VERCEL || process.env.VERCEL_ENV) {
-            console.error('⚠️ 在 Vercel 环境中，SQLite 无法工作，请配置外部数据库');
+// 创建数据库包装器（自动检测使用 SQLite 或 PostgreSQL）
+let db;
+try {
+    db = new DatabaseWrapper();
+    console.log(`✅ 数据库初始化成功，类型: ${db.dbType}`);
+} catch (error) {
+    console.error('❌ 数据库初始化失败:', error.message);
+    // 如果 PostgreSQL 连接失败，尝试使用 SQLite（仅本地开发）
+    if (!process.env.VERCEL && !process.env.VERCEL_ENV) {
+        const sqlite3 = require('sqlite3').verbose();
+        const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '../moyu_zhixue.db');
+        const dbDir = path.dirname(dbPath);
+        if (!fs.existsSync(dbDir)) {
+            fs.mkdirSync(dbDir, { recursive: true });
         }
+        db = new sqlite3.Database(dbPath, (err) => {
+            if (err) {
+                console.error('SQLite 连接错误:', err);
+            } else {
+                console.log('✅ 回退到 SQLite 数据库');
+            }
+        });
     } else {
-        console.log('成功连接到SQLite数据库');
-        console.log('数据库路径:', dbPath);
-        if (!process.env.VERCEL && !process.env.VERCEL_ENV) {
-            initDatabase();
-        } else {
-            console.warn('⚠️ Vercel 环境：跳过数据库初始化（SQLite 不支持）');
-        }
+        throw error;
     }
-});
+}
+
+// 初始化数据库（仅在首次连接时）
+if (db && db.dbType !== 'postgres') {
+    // SQLite 环境，立即初始化
+    initDatabase();
+} else if (db && db.dbType === 'postgres') {
+    // PostgreSQL 环境，延迟初始化
+    setTimeout(() => {
+        initDatabase();
+    }, 1000);
+}
 
 // 默认头像数组 - 修改为本地图片
 const defaultAvatars = [
@@ -909,9 +910,17 @@ function initDatabase() {
     let completed = 0;
 
     tables.forEach(tableName => {
-        db.run(tableSchemas[tableName], (err) => {
+        let sql = tableSchemas[tableName];
+        
+        // 如果是 PostgreSQL，转换 SQL
+        if (db.dbType === 'postgres') {
+            sql = convertTableSchema(sql);
+        }
+
+        db.run(sql, (err) => {
             if (err) {
                 console.error(`创建${tableName}表错误:`, err.message);
+                console.error('SQL:', sql.substring(0, 200));
             } else {
                 console.log(`${tableName}表已就绪`);
                 
@@ -937,27 +946,53 @@ function addMissingColumns() {
     ];
     
     columnsToAdd.forEach(({ table, column, type }) => {
-        // 修复：正确处理 PRAGMA table_info 的返回值
-        db.all(`PRAGMA table_info(${table})`, (err, rows) => {
-            if (err) {
-                console.error(`检查表${table}结构失败:`, err);
-                return;
-            }
-            
-            // 修复：rows 是一个数组，包含表结构信息
-            const columnExists = rows.some(row => row.name === column);
-            if (!columnExists) {
-                db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`, (err) => {
-                    if (err) {
-                        console.error(`添加字段${column}到表${table}失败:`, err);
-                    } else {
-                        console.log(`✅ 成功添加字段${column}到表${table}`);
-                    }
-                });
-            } else {
-                console.log(`✅ 字段${column}在表${table}中已存在`);
-            }
-        });
+        if (db.dbType === 'postgres') {
+            // PostgreSQL: 使用 information_schema
+            const checkSQL = `
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = $1 AND column_name = $2
+            `;
+            db.get(checkSQL, [table, column], (err, row) => {
+                if (err) {
+                    console.error(`检查表${table}结构失败:`, err);
+                    return;
+                }
+                
+                if (!row) {
+                    db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`, (err) => {
+                        if (err) {
+                            console.error(`添加字段${column}到表${table}失败:`, err);
+                        } else {
+                            console.log(`✅ 成功添加字段${column}到表${table}`);
+                        }
+                    });
+                } else {
+                    console.log(`✅ 字段${column}在表${table}中已存在`);
+                }
+            });
+        } else {
+            // SQLite: 使用 PRAGMA
+            db.all(`PRAGMA table_info(${table})`, (err, rows) => {
+                if (err) {
+                    console.error(`检查表${table}结构失败:`, err);
+                    return;
+                }
+                
+                const columnExists = rows.some(row => row.name === column);
+                if (!columnExists) {
+                    db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`, (err) => {
+                        if (err) {
+                            console.error(`添加字段${column}到表${table}失败:`, err);
+                        } else {
+                            console.log(`✅ 成功添加字段${column}到表${table}`);
+                        }
+                    });
+                } else {
+                    console.log(`✅ 字段${column}在表${table}中已存在`);
+                }
+            });
+        }
     });
 }
 
