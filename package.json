@@ -8,6 +8,7 @@
     "dev": "node 云梦智间服务器.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
     "@vercel/node": "^3.0.7",
     "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",

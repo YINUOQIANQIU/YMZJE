@@ -88,12 +88,16 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
 
 ## 数据库迁移方案
 
-### 方案 1：使用 Vercel Postgres（推荐）
+### 方案 1：使用 Vercel Postgres（推荐）✅ 已自动适配
 
-1. 在 Vercel 项目中添加 Postgres 数据库
-2. 获取连接字符串
-3. 修改 `server_modules/database.js` 使用 PostgreSQL 而不是 SQLite
-4. 迁移现有数据
+**好消息**：代码已自动适配 PostgreSQL，无需手动修改！
+
+1. 在 Vercel 项目中添加 Postgres 数据库（见下方详细步骤）
+2. Vercel 会自动设置 `POSTGRES_URL` 环境变量
+3. 代码会自动检测并使用 PostgreSQL
+4. 数据库表会自动创建（首次部署时）
+
+**详细步骤请查看 `VERCEL_POSTGRES_SETUP.md`**
 
 ### 方案 2：使用 Supabase（推荐）
 
